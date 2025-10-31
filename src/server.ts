@@ -14,42 +14,36 @@ import {
 import { google } from "@ai-sdk/google";
 import { processToolCalls, cleanupMessages } from "./utils";
 import { tools, executions } from "./tools";
-import { analyzeCostsWithGemini } from "./optimizer";
+import { analyzeCostsWithLLM } from "./optimizer";
+import { saveAnalysis, listAnalyses, latestAnalysis } from "./memory";
 
 const model = google("gemini-2.5-flash");
 
-/**
- * Chat Agent implementation
- */
+// (Optional) DO Chat agent remains for orchestration / workflows
 export class Chat extends AIChatAgent<Env> {
   async onChatMessage(
     onFinish: StreamTextOnFinishCallback<ToolSet>,
     _options?: { abortSignal?: AbortSignal }
   ) {
-    const allTools = {
-      ...tools,
-      ...this.mcp.getAITools()
-    };
+    const allTools = { ...tools, ...this.mcp.getAITools() };
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        const cleanedMessages = cleanupMessages(this.messages);
-
-        const processedMessages = await processToolCalls({
-          messages: cleanedMessages,
+        const cleaned = cleanupMessages(this.messages);
+        const processed = await processToolCalls({
+          messages: cleaned,
           dataStream: writer,
           tools: allTools,
           executions
         });
 
         const result = streamText({
-          system: `You are a helpful assistant that can do various tasks... 
+          system: `You are a helpful assistant that can do various tasks...
 
 ${getSchedulePrompt({ date: new Date() })}
 
-If the user asks to schedule a task, use the schedule tool to schedule the task.
-`,
-          messages: convertToModelMessages(processedMessages),
+If the user asks to schedule a task, use the schedule tool.`,
+          messages: convertToModelMessages(processed),
           model,
           tools: allTools,
           onFinish: onFinish as unknown as StreamTextOnFinishCallback<
@@ -72,80 +66,91 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
         id: generateId(),
         role: "user",
         parts: [
-          {
-            type: "text",
-            text: `Running scheduled task: ${description}`
-          }
+          { type: "text", text: `Running scheduled task: ${description}` }
         ],
-        metadata: {
-          createdAt: new Date()
-        }
+        metadata: { createdAt: new Date() }
       }
     ]);
   }
 }
 
-/**
- * Worker entry point
- */
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext) {
     const url = new URL(request.url);
+    const method = request.method;
+    const userId = "default-user"; // replace with auth/session if you add it
 
-    // ✅ Serve React UI
+    // ✅ UI (built assets)
     if (url.pathname === "/" || url.pathname.startsWith("/assets")) {
       return env.ASSETS.fetch(request);
     }
 
-    // ✅ API route: Analyze Costs
-    if (url.pathname === "/api/tools/analyzeCosts" && request.method === "POST") {
+    // ✅ Analyze (POST): run LLM + save to D1
+    if (url.pathname === "/api/tools/analyzeCosts" && method === "POST") {
       try {
-        const body = await request.json() as {
+        const body = (await request.json()) as {
           plan: string;
           metrics: string;
           comment?: string;
         };
-
-        const { plan, metrics, comment } = body;
+        const { plan, metrics, comment = "" } = body;
 
         if (!plan || !metrics) {
           return Response.json(
-            { error: "Missing required fields: plan and metrics are required" },
+            { error: "plan and metrics are required" },
             { status: 400 }
           );
         }
 
-        const result = await analyzeCostsWithGemini(env, plan, metrics, comment || "");
-
-        return Response.json({ suggestion: result });
-      } catch (error) {
-        console.error("Error in cost analysis:", error);
-        return Response.json(
-          {
-            error: "Analysis failed",
-            details: error instanceof Error ? error.message : "Unknown error"
-          },
-          { status: 500 }
+        const suggestion = await analyzeCostsWithLLM(
+          env,
+          plan,
+          metrics,
+          comment
         );
+
+        // ✅ persist
+        await saveAnalysis(env, {
+          userId,
+          plan,
+          metrics,
+          comment,
+          result: suggestion
+        });
+
+        return Response.json({ suggestion });
+      } catch (err) {
+        console.error("analyzeCosts error:", err);
+        return Response.json({ error: "Analysis failed" }, { status: 500 });
       }
     }
 
-    // ✅ API route: check Gemini key
-    if (url.pathname === "/check-gemini-key") {
-      const hasGeminiKey = !!env.GOOGLE_GEMINI_API_KEY;
-      return Response.json({ success: hasGeminiKey });
-    }
-
-    if (!env.GOOGLE_GEMINI_API_KEY) {
-      console.error(
-        "GOOGLE_GEMINI_API_KEY is not set. Use `wrangler secret put GOOGLE_GEMINI_API_KEY`"
+    // ✅ History (list last N)
+    if (url.pathname === "/api/history" && method === "GET") {
+      const limit = Number(url.searchParams.get("limit") ?? "10");
+      const rows = await listAnalyses(
+        env,
+        userId,
+        Math.max(1, Math.min(limit, 50))
       );
+      return Response.json({ rows });
     }
 
-    // ✅ fallback: route AI agent requests
+    // ✅ Latest
+    if (url.pathname === "/api/history/latest" && method === "GET") {
+      const row = await latestAnalysis(env, userId);
+      return Response.json({ row });
+    }
+
+    // Health
+    if (url.pathname === "/check-gemini-key") {
+      return Response.json({ success: !!env.GOOGLE_GEMINI_API_KEY });
+    }
+
+    // Fallback: route agent or serve UI
     return (
       (await routeAgentRequest(request, env)) ||
-      env.ASSETS.fetch(request) || // serve static assets
+      env.ASSETS.fetch(request) ||
       new Response("Not found", { status: 404 })
     );
   }

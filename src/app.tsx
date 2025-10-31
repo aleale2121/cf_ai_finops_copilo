@@ -20,7 +20,7 @@ export default function App() {
     const res = await fetch("/api/tools/analyzeCosts", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ plan: planText, metrics: metricsText, comment }),
+      body: JSON.stringify({ plan: planText, metrics: metricsText, comment })
     });
 
     const data: { suggestion?: string } = await res.json();
@@ -59,7 +59,7 @@ export default function App() {
       </div>
 
       {/* Submit Button */}
-      <Button
+      {/* <Button
         className="w-full flex items-center justify-center gap-2 overflow-hidden"
         onClick={handleAnalyze}
         disabled={loading}
@@ -72,7 +72,32 @@ export default function App() {
             {loading ? "Analyzing..." : "Analyze"}
           </span>
         </div>
-      </Button>
+      </Button> */}
+
+      <div className="flex gap-2">
+        <Button className="flex-1" onClick={handleAnalyze} disabled={loading}>
+          <div className="flex items-center gap-2 min-w-0">
+            {loading && (
+              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+            )}
+            <span className="truncate">
+              {loading ? "Analyzing..." : "Analyze"}
+            </span>
+          </div>
+        </Button>
+
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={async () => {
+            const r = await fetch("/api/history/latest");
+            const data = (await r.json()) as { row?: { result?: string } };
+            setResult(data.row?.result ?? "No saved analyses yet.");
+          }}
+        >
+          Load Latest
+        </Button>
+      </div>
 
       {/* Results Panel */}
       {result && <ResultPanel result={result} />}

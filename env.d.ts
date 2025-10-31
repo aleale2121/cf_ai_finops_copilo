@@ -6,6 +6,7 @@ declare namespace Cloudflare {
 		AI: Ai;
 		GOOGLE_GEMINI_API_KEY: string;
 		ASSETS: Fetcher;
+		DB: D1Database;  
 	}
 }
 interface Env extends Cloudflare.Env {}
