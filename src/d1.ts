@@ -12,6 +12,7 @@ export interface MessageWithFiles {
   relevant: boolean;
   messageId: string;
   files: UploadedFile[];
+  createdAt: string;
 }
 
 export async function createThread(env: Env, userId: string): Promise<string> {
@@ -77,16 +78,14 @@ export async function getThreadMessagesWithFiles(
   userId: string,
   threadId: string
 ): Promise<MessageWithFiles[]> {
-  // Get messages
   const { results: messages } = await env.DB.prepare(
-    `SELECT role, content, relevant, messageId FROM messages
+    `SELECT role, content, relevant, messageId, createdAt FROM messages
      WHERE userId = ? AND threadId = ?
      ORDER BY datetime(createdAt) ASC`
   )
     .bind(userId, threadId)
     .all();
 
-  // Get files for this thread
   const { results: files } = await env.DB.prepare(
     `SELECT id, fileName, fileType, fileSize, r2Key, uploadedAt, messageId 
      FROM uploaded_files 
@@ -96,7 +95,6 @@ export async function getThreadMessagesWithFiles(
     .bind(userId, threadId)
     .all();
 
-  // Group files by messageId
   const filesByMessage = (files as any[]).reduce((acc, file) => {
     if (file.messageId) {
       if (!acc[file.messageId]) {
@@ -114,12 +112,12 @@ export async function getThreadMessagesWithFiles(
     return acc;
   }, {});
 
-  // Combine messages with their files
   return (messages as any[]).map((msg) => ({
     role: msg.role,
     content: msg.content,
     relevant: !!msg.relevant,
     messageId: msg.messageId,
+    createdAt: msg.createdAt,
     files: filesByMessage[msg.messageId] || []
   }));
 }

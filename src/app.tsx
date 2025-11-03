@@ -7,15 +7,14 @@ import { FileIcon } from "@/components/file-icon/FileIcon";
 import {
   Loader2,
   History,
-  Upload,
   MessageCircle,
   X,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Plus
 } from "lucide-react";
 import { HistoryPanel } from "./HistoryPanel";
 
-/* ---------- Interfaces ---------- */
 interface UploadedFile {
   id: number;
   fileName: string;
@@ -53,7 +52,22 @@ interface HistoryResponse {
   messages: ChatMessage[];
 }
 
-/* ---------- Component ---------- */
+interface NewChatResponse {
+  threadId: string;
+  success: boolean;
+}
+
+interface ChatResponse {
+  reply: string;
+  threadId?: string;
+  analysisId?: number;
+  messageId?: string;
+}
+
+interface HistoryResponse {
+  messages: ChatMessage[];
+}
+
 export default function App() {
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -63,15 +77,67 @@ export default function App() {
   const [uploadSessionId, setUploadSessionId] = useState<string>(
     crypto.randomUUID()
   );
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
 
-  // Generate new session ID when needed
   const generateNewSessionId = () => {
     const newSessionId = crypto.randomUUID();
     setUploadSessionId(newSessionId);
     return newSessionId;
   };
 
-  /* ---------- File Upload Handlers ---------- */
+  const handleNewChat = async () => {
+    setChat([]);
+    setMessage("");
+    setFileUploads([]);
+    setCurrentThreadId(null);
+
+    generateNewSessionId();
+
+    try {
+      const response = await fetch("/api/chat/new", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({})
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as NewChatResponse;
+        setCurrentThreadId(data.threadId);
+        console.log("New chat started with thread:", data.threadId);
+      }
+    } catch (error) {
+      console.error("Failed to create new chat:", error);
+    }
+  };
+
+  const loadThread = async (threadId: string) => {
+    try {
+      const response = await fetch(`/api/chat/threads/${threadId}/messages`);
+      if (response.ok) {
+        const data = (await response.json()) as { messages: ChatMessage[] };
+        setChat(
+          data.messages.map((msg) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }))
+        );
+        setCurrentThreadId(threadId);
+        setMessage("");
+        setFileUploads([]);
+        generateNewSessionId();
+      }
+    } catch (error) {
+      console.error("Failed to load thread:", error);
+    }
+  };
+
+  const handleThreadSelect = async (threadId: string) => {
+    await loadThread(threadId);
+    if (window.innerWidth < 1024) {
+      setShowSidebar(false);
+    }
+  };
+
   const handleFileSelect = async (
     file: File | null,
     type: "plan" | "metrics"
@@ -172,14 +238,12 @@ export default function App() {
     setFileUploads((prev) => prev.filter((f) => f.fileType !== fileType));
   };
 
-  /* ---------- Check if send button should be enabled ---------- */
   const uploadedFiles = fileUploads
     .filter((f) => f.status === "completed")
     .map((f) => f.uploadedFile!);
   const hasCompletedUploads = uploadedFiles.length > 0;
   const isSendEnabled = message.trim().length > 0 || hasCompletedUploads;
 
-  /* ---------- Send Message ---------- */
   async function handleSend() {
     if (!isSendEnabled) return;
 
@@ -219,6 +283,7 @@ export default function App() {
 
         setMessage("");
         setFileUploads([]);
+        setCurrentThreadId(data.threadId || null);
         await loadChatHistory();
       }
     } catch (error) {
@@ -236,7 +301,6 @@ export default function App() {
     }
   }
 
-  /* ---------- Load Chat History ---------- */
   async function loadChatHistory() {
     try {
       const r = await fetch("/api/chat/history");
@@ -254,7 +318,6 @@ export default function App() {
     }
   }
 
-  /* ---------- Auto-scroll and initial load ---------- */
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -277,7 +340,6 @@ export default function App() {
 
   return (
     <main className="h-screen w-full flex flex-col bg-white dark:bg-slate-900 text-slate-900 dark:text-white overflow-hidden">
-      {/* Mobile Header */}
       <div className="lg:hidden flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
@@ -289,19 +351,30 @@ export default function App() {
             </h1>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowSidebar(!showSidebar)}
-          className="flex items-center gap-2 border-slate-300 dark:border-slate-600"
-        >
-          {showSidebar ? (
-            <PanelLeftClose className="h-4 w-4" />
-          ) : (
-            <PanelLeftOpen className="h-4 w-4" />
-          )}
-          History
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNewChat}
+            className="flex items-center gap-1 border-slate-300 dark:border-slate-600"
+          >
+            <Plus className="h-4 w-4" />
+            New
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="flex items-center gap-2 border-slate-300 dark:border-slate-600"
+          >
+            {showSidebar ? (
+              <PanelLeftClose className="h-4 w-4" />
+            ) : (
+              <PanelLeftOpen className="h-4 w-4" />
+            )}
+            History
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
@@ -319,98 +392,103 @@ export default function App() {
           `}
         >
           <div className="h-full flex flex-col">
-            {/* Sidebar Header */}
-            <div className="flex items-center justify-between p-2 lg:p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-              <h2 className="font-semibold text-md text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between p-4 lg:p-6 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+              <h2 className="font-semibold text-xl text-slate-900 dark:text-white">
                 History
               </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="lg:hidden"
-                onClick={() => setShowSidebar(false)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNewChat}
+                  className="flex items-center gap-1 border-slate-300 dark:border-slate-600"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Chat
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="lg:hidden"
+                  onClick={() => setShowSidebar(false)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
 
-            {/* History Content */}
             <div className="flex-1 overflow-y-auto">
-              <HistoryPanel />
+              <HistoryPanel
+                onNewChat={handleNewChat}
+                onThreadSelect={handleThreadSelect}
+                currentThreadId={currentThreadId}
+              />
             </div>
           </div>
         </aside>
 
-        {/* === Main Chat Area - Takes remaining space === */}
         <section className="flex-1 flex flex-col min-w-0">
-          {/* Desktop Header */}
-          <div className="hidden lg:flex items-center justify-between px-4 py-1 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+          <div className="hidden lg:flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">☁️</span>
               </div>
               <div>
-                <h1 className="text-md font-semibold text-slate-900 dark:text-white">
+                <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
                   Cloud FinOps Copilot
                 </h1>
-                <p className="text-slate-500 dark:text-slate-400 text-xs">
+                <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
                   AI-powered cloud cost optimization
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
-              onClick={() => setShowSidebar((s) => !s)}
-            >
-              <History className="h-4 w-4" />
-              {showSidebar ? "Hide" : "History"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNewChat}
+                className="flex items-center gap-1 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <Plus className="h-4 w-4" />
+                New Chat
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
+                onClick={() => setShowSidebar((s) => !s)}
+              >
+                <History className="h-4 w-4" />
+                {showSidebar ? "Hide" : "History"}
+              </Button>
+            </div>
           </div>
 
-          {/* Messages Area - Takes most of the space */}
           <div
             ref={chatContainerRef}
             className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col gap-4 lg:gap-6 bg-slate-50 dark:bg-slate-800/30"
           >
             {chat.length === 0 ? (
-              // Empty state for chat
               <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
                 <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
                   <MessageCircle className="h-8 w-8 text-blue-500" />
                 </div>
                 <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-3">
-                  Welcome to Cloud FinOps Copilot
+                  Start a new conversation
                 </h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mb-4">
-                  Upload your cloud billing files or ask questions about cost
-                  optimization.
+                  Upload cloud billing files or ask questions about cost
+                  optimization to begin.
                 </p>
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 max-w-md w-full">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Upload className="h-4 w-4 text-blue-500" />
-                    <h4 className="text-base font-medium text-slate-700 dark:text-slate-300">
-                      How it works
-                    </h4>
-                  </div>
-                  <ul className="text-left text-slate-600 dark:text-slate-400 space-y-1 text-sm">
-                    <li>
-                      • <strong>Upload files</strong> - Cloud billing and usage
-                      metrics
-                    </li>
-                    <li>
-                      • <strong>Ask questions</strong> - About cloud costs and
-                      optimization
-                    </li>
-                    <li>
-                      • <strong>Get analysis</strong> - AI-powered insights
-                    </li>
-                  </ul>
-                </div>
+                <Button
+                  onClick={handleNewChat}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Plus className="h-4 w-4" />
+                  Start New Chat
+                </Button>
               </div>
             ) : (
-              // Chat messages when there are conversations
               <>
                 {chat.map((m, i) => (
                   <div
@@ -424,7 +502,6 @@ export default function App() {
                           : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                       }`}
                     >
-                      {/* File attachments - only for user messages that have files */}
                       {m.role === "user" && m.files && m.files.length > 0 && (
                         <div className="mb-2 space-y-1">
                           <p className="text-xs opacity-80 mb-1">
@@ -451,7 +528,6 @@ export default function App() {
                         />
                       </div>
 
-                      {/* Timestamp */}
                       <div
                         className={`text-xs mt-1 ${
                           m.role === "user" ? "text-blue-100" : "text-slate-500"
@@ -491,9 +567,7 @@ export default function App() {
             )}
           </div>
 
-          {/* Compact Input Area at Bottom */}
           <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            {/* File Upload Progress Area - Only show when uploading */}
             {fileUploads.length > 0 && (
               <div className="p-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
                 <div className="flex items-center gap-2 mb-2">
@@ -558,7 +632,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Compact File Uploads */}
             <div className="p-3 border-b border-slate-100 dark:border-slate-700">
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -580,7 +653,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Compact Input Controls */}
             <div className="p-3">
               <div className="flex gap-2 items-end">
                 <Textarea

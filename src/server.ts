@@ -35,7 +35,6 @@ const model = google("gemini-2.5-flash");
 
 type AiRunOut = { response?: string };
 
-// Add this function to get relevant context
 async function getRelevantContext(
   env: Env,
   userId: string,
@@ -235,10 +234,30 @@ export default {
       `🌐 ${request.method} ${url.pathname} - Starting request processing`
     );
 
-    // Serve UI
     if (url.pathname === "/" || url.pathname.startsWith("/assets")) {
       console.log("📁 Serving static assets");
       return env.ASSETS.fetch(request);
+    }
+
+    // Create new chat thread
+    if (url.pathname === "/api/chat/new" && request.method === "POST") {
+      console.log("🆕 New chat request");
+      try {
+        const userId = "guest";
+        const threadId = await createThread(env, userId);
+
+        console.log(`✅ New thread created: ${threadId}`);
+        return Response.json({
+          threadId,
+          success: true
+        });
+      } catch (error) {
+        console.error("❌ Failed to create new thread:", error);
+        return Response.json(
+          { error: "Failed to create new chat" },
+          { status: 500 }
+        );
+      }
     }
 
     // File download endpoint
@@ -630,28 +649,23 @@ export default {
               (files.length > 0
                 ? `[Uploaded Files: ${files.map((f) => f.fileName).join(", ")}]`
                 : ""),
-            false, // relevant = false
+            false,
             null,
             messageId
           );
 
-          // Determine appropriate response based on what was provided
           let reply = "";
           if (files.length > 0 && message.trim()) {
-            // Both files and message provided but irrelevant
             reply =
               "The uploaded files and message don't appear to be related to cloud cost optimization. Please upload cloud billing files, usage metrics, or ask FinOps-related questions.";
           } else if (files.length > 0) {
-            // Only files provided but irrelevant
             reply =
               "The uploaded files don't appear to be related to cloud cost optimization. Please upload cloud billing files (AWS, Azure, GCP invoices), usage metrics, or infrastructure configuration files.";
           } else {
-            // Only message provided but irrelevant
             reply =
               "I'm specialized in cloud cost optimization and FinOps. Please ask me about cloud billing, cost optimization strategies, usage metrics analysis, or upload relevant cloud infrastructure files.";
           }
 
-          // Save assistant response as non-relevant
           await saveMessage(
             env,
             userId,
@@ -757,6 +771,61 @@ export default {
       const summary = (out as AiRunOut)?.response ?? "";
       console.log(`✅ Summary generated: ${summary.length} chars`);
       return Response.json({ summary });
+    }
+
+    // Get messages for a specific thread
+    if (
+      url.pathname.startsWith("/api/chat/threads/") &&
+      url.pathname.endsWith("/messages") &&
+      request.method === "GET"
+    ) {
+      const pathParts = url.pathname.split("/");
+      const threadId = pathParts[pathParts.length - 2];
+
+      console.log(`📜 Loading messages for thread: ${threadId}`);
+
+      if (!threadId) {
+        return Response.json({ error: "Thread ID required" }, { status: 400 });
+      }
+
+      try {
+        const messagesWithFiles = await getThreadMessagesWithFiles(
+          env,
+          "guest",
+          threadId
+        );
+
+        // Generate download URLs for files
+        const messages = await Promise.all(
+          messagesWithFiles.map(async (msg) => {
+            const filesWithUrls = await Promise.all(
+              msg.files.map(async (file) => ({
+                ...file,
+                downloadUrl: await getFileDownloadUrl(env, file.r2Key)
+              }))
+            );
+
+            return {
+              role: msg.role,
+              text: msg.content,
+              files: filesWithUrls,
+              messageId: msg.messageId,
+              timestamp: msg.createdAt
+            };
+          })
+        );
+
+        console.log(
+          `✅ Loaded ${messages.length} messages for thread: ${threadId}`
+        );
+        return Response.json({ messages });
+      } catch (error) {
+        console.error("❌ Failed to load thread messages:", error);
+        return Response.json(
+          { error: "Failed to load messages" },
+          { status: 500 }
+        );
+      }
     }
 
     // Delete a thread

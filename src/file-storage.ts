@@ -14,15 +14,14 @@ export async function storeFileInR2(
   userId: string,
   threadId: string
 ): Promise<string> {
-  // Check if FILES_BUCKET is available
   if (!env.FILES) {
     throw new Error("FILES_BUCKET is not configured");
   }
 
   const fileId = crypto.randomUUID();
-  const fileExtension = file.name.split('.').pop() || 'bin';
+  const fileExtension = file.name.split(".").pop() || "bin";
   const r2Key = `${userId}/${threadId}/${fileId}.${fileExtension}`;
-  
+
   try {
     await env.FILES.put(r2Key, file.stream(), {
       httpMetadata: {
@@ -30,7 +29,7 @@ export async function storeFileInR2(
         contentDisposition: `attachment; filename="${file.name}"`
       }
     });
-    
+
     return r2Key;
   } catch (error) {
     console.error("R2 put error:", error);
@@ -59,7 +58,18 @@ export async function saveFileMetadata(
   const { meta } = await env.DB.prepare(
     `INSERT INTO uploaded_files (userId, threadId, messageId, analysisId, fileName, fileType, fileSize, r2Key, uploadedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-  ).bind(userId, threadId, sessionId, analysisId, fileName, fileType, fileSize, r2Key).run();
+  )
+    .bind(
+      userId,
+      threadId,
+      sessionId,
+      analysisId,
+      fileName,
+      fileType,
+      fileSize,
+      r2Key
+    )
+    .run();
 
   return (meta as { last_row_id?: number }).last_row_id ?? 0;
 }
@@ -73,9 +83,11 @@ export async function getMessageFiles(
      FROM uploaded_files 
      WHERE messageId = ?
      ORDER BY uploadedAt ASC`
-  ).bind(messageId).all();
+  )
+    .bind(messageId)
+    .all();
 
-  return (results as any[]).map(row => ({
+  return (results as any[]).map((row) => ({
     id: row.id,
     fileName: row.fileName,
     fileType: row.fileType,
