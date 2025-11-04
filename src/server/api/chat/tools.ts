@@ -1,12 +1,9 @@
-/**
- * Tool definitions for the AI chat agent
- */
 import { tool, type ToolSet } from "ai";
 import { z } from "zod/v3";
 
-import type { Chat } from "./server";
+import type { Chat } from "../../ai/chat-agent";
 import { getCurrentAgent } from "agents";
-import { analyzeCostsWithGemini } from "./optimizer";
+import { analyzeCostsWithGemini } from "../../ai/optimizer";
 
 const analyzeCosts = tool({
   description: "Analyze a cloud plan + usage metrics and suggest optimizations",

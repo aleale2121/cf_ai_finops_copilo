@@ -1,4 +1,4 @@
-import { type UploadedFile } from "./file-storage";
+import { type UploadedFile } from "../storage/file-storage";
 export interface Thread {
   threadId: string;
   title: string;
@@ -147,7 +147,8 @@ export async function listThreads(env: Env, userId: string): Promise<Thread[]> {
     `SELECT c.threadId, c.title, c.createdAt,
        (SELECT COUNT(*) FROM messages m WHERE m.threadId = c.threadId) AS msgCount
      FROM conversations c
-     WHERE c.userId = ?
+     WHERE c.userId = ? 
+     AND EXISTS (SELECT 1 FROM messages m WHERE m.threadId = c.threadId)
      ORDER BY datetime(c.createdAt) DESC`
   )
     .bind(userId)
