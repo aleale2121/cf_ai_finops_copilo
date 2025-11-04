@@ -1,5 +1,7 @@
-import { saveMessage, saveAnalysis } from "../../db/d1";
+import type { UploadedFile } from "@/types/chat";
 import { analyzeCostsWithGemini } from "../../ai/optimizer";
+import { saveAnalysis, saveMessage } from "../../db/d1";
+import { getFilesBySession } from "../../storage/file-storage";
 import { getRelevantContext, isRelevant } from "../../utils/context";
 
 export async function processChatMessage(
@@ -13,105 +15,107 @@ export async function processChatMessage(
   const messageId = crypto.randomUUID();
   let analysisId: number | null = null;
 
-  console.log("🔍 Retrieving files for session...");
+  console.log("Processing chat message...");
+  console.log(`Processing message for thread: ${threadId}`);
+  console.log(`Session ID: ${sessionId}, File IDs: ${fileIds.join(", ")}`);
 
-  // Get all files for this session
-  let filesQuery = "";
-  const queryParams: (string | number)[] = [userId, threadId];
+  let files: UploadedFile[] = [];
 
   if (fileIds.length > 0) {
-    filesQuery = `AND id IN (${fileIds.map(() => "?").join(",")})`;
-    queryParams.push(...fileIds);
+    console.log("📁 Querying files by file IDs...");
+    const fileIdsPlaceholder = fileIds.map(() => "?").join(",");
+    const { results: filesResult } = await env.DB.prepare(
+      `SELECT * FROM uploaded_files 
+       WHERE userId = ? AND threadId = ? AND id IN (${fileIdsPlaceholder})
+       ORDER BY fileName ASC`
+    )
+      .bind(userId, threadId, ...fileIds)
+      .all();
+
+    files = (
+      filesResult as {
+        id: number;
+        fileName: string;
+        fileType: string;
+        fileSize: number;
+        r2Key: string;
+        uploadedAt: string;
+      }[]
+    ).map((file) => ({
+      id: file.id,
+      fileName: file.fileName,
+      fileType: file.fileType,
+      fileSize: file.fileSize,
+      r2Key: file.r2Key,
+      uploadedAt: file.uploadedAt
+    }));
   } else if (sessionId) {
-    filesQuery = "AND messageId = ?";
-    queryParams.push(sessionId);
+    console.log("Querying files by session ID...");
+    files = await getFilesBySession(env, sessionId);
   } else {
-    console.log("❌ Neither fileIds nor sessionId provided");
-    return Response.json(
-      { error: "Either fileIds or sessionId required" },
-      { status: 400 }
-    );
+    console.log("No files provided - processing text-only message");
   }
 
-  const { results: filesResult } = await env.DB.prepare(
-    `SELECT * FROM uploaded_files 
-     WHERE userId = ? AND threadId = ? ${filesQuery}
-     ORDER BY fileName ASC`
-  )
-    .bind(...queryParams)
-    .all();
+  console.log(`Found ${files.length} files for processing`);
 
-  const files = (
-    filesResult as {
-      id: number;
-      fileName: string;
-      fileType: string;
-      fileSize: number;
-      r2Key: string;
-      uploadedAt: string;
-    }[]
-  ).map((file) => ({
-    id: file.id,
-    fileName: file.fileName,
-    fileType: file.fileType,
-    fileSize: file.fileSize,
-    r2Key: file.r2Key,
-    uploadedAt: file.uploadedAt
-  }));
-
-  console.log(`📁 Found ${files.length} files for session`);
-
-  // Check relevance based on all files in session
   let fileContents = "";
   let planText = "";
   let metricsText = "";
 
-  console.log("📖 Reading file contents for analysis...");
-  for (const file of files) {
-    fileContents += `File: ${file.fileName}\n`;
+  if (files.length > 0) {
+    console.log("Reading file contents for analysis...");
+    for (const file of files) {
+      fileContents += `File: ${file.fileName}\n`;
 
-    // Read file contents for analysis and relevance check
-    const object = await env.FILES.get(file.r2Key);
-    if (object) {
-      const content = await object.text();
-      console.log(`📄 Read file: ${file.fileName} (${content.length} chars)`);
+      const object = await env.FILES.get(file.r2Key);
+      if (object) {
+        const content = await object.text();
+        console.log(`Read file: ${file.fileName} (${content.length} chars)`);
 
-      // Add file content to relevance check (first 1000 chars to avoid token limits)
-      fileContents += `Content preview: ${content.substring(0, 1000)}\n\n`;
+        fileContents += `Content preview: ${content.substring(0, 1000)}\n\n`;
 
-      if (file.fileName.includes("plan") || file.fileName.includes("billing")) {
-        planText = content;
-        console.log(`📊 Identified as plan/billing file: ${file.fileName}`);
+        if (
+          file.fileName.includes("plan") ||
+          file.fileName.includes("billing")
+        ) {
+          planText = content;
+          console.log(`Identified as plan/billing file: ${file.fileName}`);
+        } else {
+          metricsText = content;
+          console.log(`Identified as metrics file: ${file.fileName}`);
+        }
       } else {
-        metricsText = content;
-        console.log(`📈 Identified as metrics file: ${file.fileName}`);
+        console.log(`❌ Could not read file from R2: ${file.r2Key}`);
       }
-    } else {
-      console.log(`❌ Could not read file from R2: ${file.r2Key}`);
     }
   }
 
-  // Also check file names for relevance
-  const fileNames = files.map((f) => f.fileName).join(", ");
-  const relevanceText = `Files: ${fileNames}\n\n${fileContents}\n\nUser message: ${message}`;
+  let relevanceText = "";
 
-  console.log("🔍 Starting relevance check...");
+  if (files.length > 0) {
+    const fileNames = files.map((f) => f.fileName).join(", ");
+    relevanceText = `Files: ${fileNames}\n\n${fileContents}\n\nUser message: ${message}`;
+  } else {
+    relevanceText = `User message: ${message}`;
+  }
+
+  console.log("Starting relevance check...");
   console.log(
-    `📝 Relevance check input preview: ${relevanceText.substring(0, 500)}`
+    `Relevance check input preview: ${relevanceText.substring(0, 500)}`
   );
 
   const isRelevantAnalysis = await isRelevant(env, relevanceText);
 
   if (isRelevantAnalysis) {
-    console.log("✅ Files are relevant, proceeding with analysis...");
+    console.log("✅ Content is relevant, proceeding with analysis...");
 
-    // Get relevant context from previous messages
     const relevantContext = await getRelevantContext(env, userId, threadId);
     console.log(
-      `📚 Retrieved ${relevantContext.length > 0 ? "relevant context" : "no relevant context"}`
+      `Retrieved ${relevantContext.length > 0 ? "relevant context" : "no relevant context"}`
     );
 
-    console.log("🤖 Starting AI analysis...");
+    console.log("Starting AI analysis...");
+
     const result = await analyzeCostsWithGemini(
       env,
       planText,
@@ -119,32 +123,36 @@ export async function processChatMessage(
       message,
       relevantContext
     );
+
     console.log(`✅ AI analysis completed (${result.length} chars)`);
 
-    analysisId = await saveAnalysis(
-      env,
-      userId,
-      threadId,
-      planText,
-      metricsText,
-      message,
-      result
-    );
-    console.log(`💾 Analysis saved with ID: ${analysisId}`);
+    if (files.length > 0) {
+      analysisId = await saveAnalysis(
+        env,
+        userId,
+        threadId,
+        planText,
+        metricsText,
+        message,
+        result
+      );
+      console.log(`Analysis saved with ID: ${analysisId}`);
+    }
 
-    // Update all files in this session with the final messageId and analysisId
-    console.log("🔗 Linking files to message and analysis...");
-    await env.DB.prepare(
-      `UPDATE uploaded_files 
-       SET messageId = ?, analysisId = ? 
-       WHERE userId = ? AND threadId = ? AND messageId = ?`
-    )
-      .bind(messageId, analysisId, userId, threadId, sessionId)
-      .run();
+    if (files.length > 0 && sessionId) {
+      console.log("Linking files to message and analysis...");
+      await env.DB.prepare(
+        `UPDATE uploaded_files 
+         SET messageId = ?, analysisId = ? 
+         WHERE userId = ? AND threadId = ? AND sessionId = ?`
+      )
+        .bind(messageId, analysisId, userId, threadId, sessionId)
+        .run();
 
-    console.log(
-      `✅ Updated ${files.length} files with messageId: ${messageId}`
-    );
+      console.log(
+        `✅ Updated ${files.length} files with messageId: ${messageId}`
+      );
+    }
 
     // Save messages as relevant
     console.log("💾 Saving chat messages...");
@@ -156,7 +164,7 @@ export async function processChatMessage(
       message ||
         (files.length > 0
           ? `[Uploaded Files: ${files.map((f) => f.fileName).join(", ")}]`
-          : ""),
+          : message),
       true,
       analysisId,
       messageId
@@ -181,7 +189,6 @@ export async function processChatMessage(
   } else {
     console.log("❌ Content is irrelevant, saving as non-relevant message...");
 
-    // Save the user message as non-relevant
     await saveMessage(
       env,
       userId,
@@ -190,7 +197,7 @@ export async function processChatMessage(
       message ||
         (files.length > 0
           ? `[Uploaded Files: ${files.map((f) => f.fileName).join(", ")}]`
-          : ""),
+          : message),
       false,
       null,
       messageId

@@ -17,7 +17,7 @@ export async function chatRoutes(
 
   // Create new chat thread
   if (url.pathname === "/api/chat/new" && request.method === "POST") {
-    console.log("🆕 New chat request");
+    console.log("New chat request");
     try {
       const threadId = await createThread(env, userId);
       console.log(`✅ New thread created: ${threadId}`);
@@ -38,10 +38,14 @@ export async function chatRoutes(
 
   // History endpoint with files
   if (url.pathname === "/api/chat/history" && request.method === "GET") {
-    console.log("📜 Chat history request");
-    const threadId = await getLatestThread(env, "guest");
+    console.log("Chat history request");
+
+    // Get threadId from query params if provided
+    const threadId =
+      url.searchParams.get("threadId") || (await getLatestThread(env, "guest"));
+
     if (!threadId) {
-      console.log("📜 No thread found, returning empty history");
+      console.log("No thread found, returning empty history");
       return Response.json({ messages: [] });
     }
 
@@ -54,13 +58,13 @@ export async function chatRoutes(
 
     if (messagesWithFiles.length === 0) {
       console.log(
-        "📜 Thread exists but has no messages, returning empty history"
+        "Thread exists but has no messages, returning empty history"
       );
       return Response.json({ messages: [] });
     }
 
-    console.log(`📜 Loading history for thread: ${threadId}`);
-    console.log(`📜 Found ${messagesWithFiles.length} messages with files`);
+    console.log(`Loading history for thread: ${threadId}`);
+    console.log(`Found ${messagesWithFiles.length} messages with files`);
 
     // Generate download URLs for files
     const messages = await Promise.all(
@@ -76,13 +80,14 @@ export async function chatRoutes(
           role: msg.role,
           text: msg.content,
           files: filesWithUrls,
-          messageId: msg.messageId
+          messageId: msg.messageId,
+          timestamp: msg.createdAt
         };
       })
     );
 
     console.log("✅ History loaded successfully");
-    return Response.json({ messages });
+    return Response.json({ messages, threadId });
   }
 
   // List threads
@@ -108,9 +113,9 @@ export async function chatRoutes(
     request.method === "DELETE"
   ) {
     const threadId = url.pathname.split("/").pop()!;
-    console.log(`🗑️ Delete thread request: ${threadId}`);
+    console.log(`Delete thread request: ${threadId}`);
     await deleteThread(env, userId, threadId);
-    console.log(`✅ Thread deleted: ${threadId}`);
+    console.log(`Thread deleted: ${threadId}`);
     return Response.json({ success: true });
   }
 
@@ -122,32 +127,33 @@ async function handleChatMessage(
   env: Env,
   userId: string
 ): Promise<Response> {
-  console.log("💭 Chat request received");
+  console.log("Chat request received");
   try {
     const {
       message = "",
       fileIds = [],
-      sessionId = ""
+      sessionId = "",
+      threadId: providedThreadId 
     } = (await request.json()) as {
       message?: string;
       fileIds?: number[];
       sessionId?: string;
+      threadId?: string;
     };
 
     console.log(
-      `📨 Chat details - Message: "${message}", File IDs: ${fileIds.length}, Session: ${sessionId}`
+      `Chat details - Message: "${message}", File IDs: ${fileIds.length}, Session: ${sessionId}, Thread: ${providedThreadId || "not provided"}`
     );
 
-    // Only create a thread if there's actual content (message or files)
+    let threadId = providedThreadId || (await getLatestThread(env, userId));
+
     const hasContent = message.trim().length > 0 || fileIds.length > 0;
 
-    let threadId = await getLatestThread(env, userId);
-
     if (!threadId && hasContent) {
-      console.log("🧵 No existing thread, creating new one...");
+      console.log("No existing thread, creating new one...");
       threadId = await createThread(env, userId);
     } else if (!threadId) {
-      console.log("🧵 No content provided, not creating thread");
+      console.log("No content provided, not creating thread");
       return Response.json({
         reply:
           "Please enter a message or upload files to start a conversation.",
@@ -157,16 +163,19 @@ async function handleChatMessage(
 
     console.log(`🧵 Using thread: ${threadId}`);
 
+    const finalSessionId = sessionId || crypto.randomUUID();
+    console.log(`Using session ID: ${finalSessionId}`);
+
     return await processChatMessage(
       env,
       userId,
       threadId,
       message,
       fileIds,
-      sessionId
+      finalSessionId
     );
   } catch (e) {
-    console.error("❌ POST /api/chat failed:", e);
+    console.error("POST /api/chat failed:", e);
     return Response.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -180,7 +189,7 @@ async function handleGetThreadMessages(
   const pathParts = url.pathname.split("/");
   const threadId = pathParts[pathParts.length - 2];
 
-  console.log(`📜 Loading messages for thread: ${threadId}`);
+  console.log(`Loading messages for thread: ${threadId}`);
 
   if (!threadId) {
     return Response.json({ error: "Thread ID required" }, { status: 400 });
@@ -193,7 +202,6 @@ async function handleGetThreadMessages(
       threadId
     );
 
-    // Generate download URLs for files
     const messages = await Promise.all(
       messagesWithFiles.map(async (msg) => {
         const filesWithUrls = await Promise.all(
@@ -222,5 +230,3 @@ async function handleGetThreadMessages(
     return Response.json({ error: "Failed to load messages" }, { status: 500 });
   }
 }
-
-// This function is large, so I'll continue it in the next part...

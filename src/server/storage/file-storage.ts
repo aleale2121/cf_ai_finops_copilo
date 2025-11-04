@@ -6,6 +6,7 @@ export interface UploadedFile {
   r2Key: string;
   uploadedAt: string;
   downloadUrl?: string;
+  sessionId?: string;
 }
 
 export async function storeFileInR2(
@@ -56,13 +57,14 @@ export async function saveFileMetadata(
   r2Key: string
 ): Promise<number> {
   const { meta } = await env.DB.prepare(
-    `INSERT INTO uploaded_files (userId, threadId, messageId, analysisId, fileName, fileType, fileSize, r2Key, uploadedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    `INSERT INTO uploaded_files (userId, threadId, sessionId, messageId, analysisId, fileName, fileType, fileSize, r2Key, uploadedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
   )
     .bind(
       userId,
       threadId,
       sessionId,
+      sessionId, // Use sessionId as initial messageId
       analysisId,
       fileName,
       fileType,
@@ -79,7 +81,7 @@ export async function getMessageFiles(
   messageId: string
 ): Promise<UploadedFile[]> {
   const { results } = await env.DB.prepare(
-    `SELECT id, fileName, fileType, fileSize, r2Key, uploadedAt 
+    `SELECT id, fileName, fileType, fileSize, r2Key, uploadedAt, sessionId
      FROM uploaded_files 
      WHERE messageId = ?
      ORDER BY uploadedAt ASC`
@@ -95,6 +97,7 @@ export async function getMessageFiles(
     fileSize: number;
     r2Key: string;
     uploadedAt: string;
+    sessionId?: string;
   }[];
 
   return resultsArray.map((row) => ({
@@ -103,6 +106,41 @@ export async function getMessageFiles(
     fileType: row.fileType,
     fileSize: row.fileSize,
     r2Key: row.r2Key,
-    uploadedAt: row.uploadedAt
+    uploadedAt: row.uploadedAt,
+    sessionId: row.sessionId
+  }));
+}
+
+export async function getFilesBySession(
+  env: Env,
+  sessionId: string
+): Promise<UploadedFile[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, fileName, fileType, fileSize, r2Key, uploadedAt, sessionId
+     FROM uploaded_files 
+     WHERE sessionId = ?
+     ORDER BY uploadedAt ASC`
+  )
+    .bind(sessionId)
+    .all();
+
+  const resultsArray = results as unknown as {
+    id: number;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    r2Key: string;
+    uploadedAt: string;
+    sessionId?: string;
+  }[];
+
+  return resultsArray.map((row) => ({
+    id: row.id,
+    fileName: row.fileName,
+    fileType: row.fileType,
+    fileSize: row.fileSize,
+    r2Key: row.r2Key,
+    uploadedAt: row.uploadedAt,
+    sessionId: row.sessionId
   }));
 }

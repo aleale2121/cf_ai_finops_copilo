@@ -37,7 +37,7 @@ async function handleFileDownload(
   try {
     const url = new URL(request.url);
     const r2Key = decodeURIComponent(url.pathname.replace("/api/files/", ""));
-    console.log(`📥 File download requested for key: ${r2Key}`);
+    console.log(`File download requested for key: ${r2Key}`);
 
     const obj = await env.FILES.get(r2Key);
     if (!obj) {
@@ -68,15 +68,24 @@ async function handleFileUpload(
   env: Env,
   userId: string
 ): Promise<Response> {
-  console.log("📤 File upload request received");
+  console.log("File upload request received");
   try {
+    const url = new URL(request.url);
+    const threadIdFromQuery = url.searchParams.get("threadId");
+    const threadId =
+      threadIdFromQuery ||
+      (await getLatestThread(env, userId)) ||
+      (await createThread(env, userId));
+
+    console.log(`Storing file in R2 for thread: ${threadId}`);
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const fileType = formData.get("fileType") as string;
     const sessionId = formData.get("sessionId") as string;
 
     console.log(
-      `📄 File upload details - Name: ${file?.name}, Type: ${fileType}, Size: ${file?.size} bytes, Session: ${sessionId}`
+      `File upload details - Name: ${file?.name}, Type: ${fileType}, Size: ${file?.size} bytes, Session: ${sessionId}`
     );
 
     if (!file) {
@@ -99,10 +108,6 @@ async function handleFileUpload(
       );
     }
 
-    const threadId =
-      (await getLatestThread(env, userId)) || (await createThread(env, userId));
-    console.log(`💾 Storing file in R2 for thread: ${threadId}`);
-
     // Store file in R2
     let r2Key: string;
     try {
@@ -117,7 +122,7 @@ async function handleFileUpload(
     }
 
     // Save file metadata with session ID
-    console.log("💾 Saving file metadata to database...");
+    console.log("Saving file metadata to database...");
     const fileId = await saveFileMetadata(
       env,
       userId,
@@ -154,7 +159,7 @@ async function handleFileDelete(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
   const fileId = url.pathname.split("/").pop();
-  console.log(`🗑️ File delete requested for ID: ${fileId}`);
+  console.log(`File delete requested for ID: ${fileId}`);
 
   try {
     const pathParts = url.pathname.split("/");
@@ -166,7 +171,7 @@ async function handleFileDelete(request: Request, env: Env): Promise<Response> {
       });
     }
 
-    console.log(`🗑️ Deleting file with ID: ${fileId}`);
+    console.log(`Deleting file with ID: ${fileId}`);
 
     // Find R2 key for file
     const { results } = await env.DB.prepare(

@@ -9,12 +9,10 @@ export async function aiRoutes(
 ): Promise<Response | null> {
   const url = new URL(request.url);
 
-  // Summarize a thread
   if (url.pathname === "/api/chat/summarize" && request.method === "POST") {
     return await handleThreadSummarize(request, env, userId);
   }
 
-  // Debug endpoint to check R2 files
   if (url.pathname === "/api/debug/files" && request.method === "GET") {
     return await handleDebugFiles(request, env);
   }
@@ -27,16 +25,16 @@ async function handleThreadSummarize(
   env: Env,
   userId: string
 ): Promise<Response> {
-  console.log("📝 Thread summarize request");
+  console.log("Thread summarize request");
   const { threadId } = (await request.json()) as { threadId?: string };
   if (!threadId) {
     console.log("❌ No threadId provided for summarization");
     return Response.json({ error: "threadId is required" }, { status: 400 });
   }
 
-  console.log(`📝 Summarizing thread: ${threadId}`);
+  console.log(`Summarizing thread: ${threadId}`);
   const full = await getFullThreadText(env, userId, threadId);
-  console.log(`📝 Thread content length: ${full.length} chars`);
+  console.log(`Thread content length: ${full.length} chars`);
 
   const out = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [
@@ -62,7 +60,7 @@ async function handleDebugFiles(
   _request: Request,
   env: Env
 ): Promise<Response> {
-  console.log("🐛 Debug files request");
+  console.log("Debug files request");
   try {
     const objects = await env.FILES.list();
     const fileList = objects.objects.map((obj) => ({
@@ -76,7 +74,7 @@ async function handleDebugFiles(
     ).all();
 
     console.log(
-      `🐛 R2 Files: ${fileList.length}, DB Files: ${results?.length || 0}`
+      `R2 Files: ${fileList.length}, DB Files: ${results?.length || 0}`
     );
 
     return Response.json({

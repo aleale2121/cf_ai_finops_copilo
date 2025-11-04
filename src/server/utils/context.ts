@@ -31,7 +31,7 @@ export async function getRelevantContext(
 }
 
 export async function isRelevant(env: Env, text: string): Promise<boolean> {
-  console.log("🔍 Starting relevance check...");
+  console.log("Starting relevance check...");
   if (!text || !text.trim()) {
     console.log("❌ Relevance check: Empty text, returning false");
     return false;
@@ -81,11 +81,11 @@ export async function isRelevant(env: Env, text: string): Promise<boolean> {
     const foundKeywords = cloudKeywords.filter((keyword) =>
       lowerText.includes(keyword)
     );
-    console.log(`📝 Found keywords: ${foundKeywords.join(", ")}`);
+    console.log(`Found keywords: ${foundKeywords.join(", ")}`);
     return true;
   }
 
-  console.log("🤖 No obvious keywords found, using AI for relevance check...");
+  console.log("No obvious keywords found, using AI for relevance check...");
 
   try {
     const res = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
@@ -122,10 +122,10 @@ export async function isRelevant(env: Env, text: string): Promise<boolean> {
     });
 
     const answer = (res as AiRunOut)?.response?.trim().toUpperCase() || "";
-    console.log(`🤖 AI Relevance check result: "${answer}"`);
+    console.log(`AI Relevance check result: "${answer}"`);
     const result = answer.startsWith("Y");
     console.log(
-      `📊 Relevance final decision: ${result ? "RELEVANT" : "IRRELEVANT"}`
+      `Relevance final decision: ${result ? "RELEVANT" : "IRRELEVANT"}`
     );
     return result;
   } catch (error) {

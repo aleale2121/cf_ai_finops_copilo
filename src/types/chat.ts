@@ -39,3 +39,10 @@ export interface NewChatResponse {
   threadId: string;
   success: boolean;
 }
+
+export interface ChatRequest {
+  message?: string;
+  fileIds?: number[];
+  sessionId: string;
+  threadId?: string;
+}

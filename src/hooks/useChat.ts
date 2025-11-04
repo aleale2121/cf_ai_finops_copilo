@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import type {
   ChatMessage,
+  ChatRequest, 
   ChatResponse,
   FileUploadProgress,
   HistoryResponse,
+  NewChatResponse,
   UploadedFile
 } from "@/types/chat";
 
@@ -16,11 +18,12 @@ export function useChat() {
     crypto.randomUUID()
   );
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Wrap in useCallback to stabilize the function reference
   const generateNewSessionId = useCallback(() => {
     const newSessionId = crypto.randomUUID();
     setUploadSessionId(newSessionId);
+    console.log("Generated new session ID:", newSessionId);
     return newSessionId;
   }, []);
 
@@ -75,11 +78,21 @@ export function useChat() {
     ]);
 
     try {
-      const currentSessionId = uploadSessionId || generateNewSessionId();
+      const currentSessionId = uploadSessionId;
+      const currentThread = currentThreadId;
+      if (!currentSessionId) {
+        console.error("❌ No session ID available for file upload");
+        return;
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("fileType", type);
       formData.append("sessionId", currentSessionId);
+
+      const uploadUrl = currentThread
+        ? `/api/files/upload?threadId=${currentThread}`
+        : "/api/files/upload";
 
       const xhr = new XMLHttpRequest();
 
@@ -128,7 +141,7 @@ export function useChat() {
         );
       });
 
-      xhr.open("POST", "/api/files/upload");
+      xhr.open("POST", uploadUrl);
       xhr.send(formData);
     } catch (error) {
       console.error("File upload error:", error);
@@ -153,15 +166,46 @@ export function useChat() {
   };
 
   const handleNewChat = async () => {
-    setChat([]);
-    setMessage("");
-    setFileUploads([]);
-    setCurrentThreadId(null);
-    generateNewSessionId();
+    try {
+      const response = await fetch("/api/chat/new", {
+        method: "POST"
+      });
 
-    console.log(
-      "🆕 Preparing new chat - thread will be created with first message"
-    );
+      if (response.ok) {
+        const data = (await response.json()) as NewChatResponse;
+
+        if (!data.threadId) {
+          throw new Error("Invalid response: missing threadId");
+        }
+
+        const newThreadId = data.threadId;
+
+        // Reset all state
+        setChat([]);
+        setMessage("");
+        setFileUploads([]);
+        setCurrentThreadId(newThreadId);
+        generateNewSessionId();
+
+        console.log("🆕 New chat created with thread:", newThreadId);
+      } else {
+        console.error("Failed to create new thread");
+        // Fallback: just reset UI state
+        setChat([]);
+        setMessage("");
+        setFileUploads([]);
+        setCurrentThreadId(null);
+        generateNewSessionId();
+      }
+    } catch (error) {
+      console.error("Error creating new chat:", error);
+      // Fallback: just reset UI state
+      setChat([]);
+      setMessage("");
+      setFileUploads([]);
+      setCurrentThreadId(null);
+      generateNewSessionId();
+    }
   };
 
   const handleSend = async () => {
@@ -169,7 +213,8 @@ export function useChat() {
       .filter((f) => f.status === "completed")
       .map((f) => f.uploadedFile!);
     const hasCompletedUploads = uploadedFiles.length > 0;
-    const isSendEnabled = message.trim().length > 0 || hasCompletedUploads;
+    const hasMessage = message.trim().length > 0;
+    const isSendEnabled = hasMessage || hasCompletedUploads;
 
     if (!isSendEnabled) return;
 
@@ -178,22 +223,35 @@ export function useChat() {
 
     const userMessage: ChatMessage = {
       role: "user",
-      text: message || (hasCompletedUploads ? "[Uploaded Files]" : ""),
+      text: hasMessage
+        ? message
+        : hasCompletedUploads
+          ? "[Uploaded Files]"
+          : "",
       timestamp: new Date(),
       files: uploadedFiles
     };
     setChat((c) => [...c, userMessage]);
 
     try {
-      const currentSessionId = uploadSessionId || generateNewSessionId();
+      const currentSessionId = uploadSessionId;
+      if (!currentSessionId) {
+        console.error("❌ No session ID available for sending message");
+        setLoading(false);
+        return;
+      }
+
+      const requestBody: ChatRequest = {
+        sessionId: currentSessionId,
+        message: hasMessage ? message : undefined,
+        fileIds: fileIds.length > 0 ? fileIds : undefined,
+        threadId: currentThreadId || undefined 
+      };
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message,
-          fileIds,
-          sessionId: currentSessionId
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data: ChatResponse = await res.json();
@@ -211,7 +269,7 @@ export function useChat() {
           setCurrentThreadId(data.threadId);
         }
 
-        await loadChatHistory();
+        generateNewSessionId();
       }
     } catch (error) {
       console.error(error);
@@ -228,10 +286,19 @@ export function useChat() {
     }
   };
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = useCallback(async () => {
+    if (historyLoading) return;
+
+    setHistoryLoading(true);
     try {
-      const r = await fetch("/api/chat/history");
-      const d: HistoryResponse = await r.json();
+    
+      const url = currentThreadId
+        ? `/api/chat/history?threadId=${currentThreadId}`
+        : "/api/chat/history";
+
+      const r = await fetch(url);
+      const d: HistoryResponse & { threadId?: string } = await r.json();
+
       if (d.messages) {
         setChat(
           d.messages.map((msg) => ({
@@ -239,17 +306,17 @@ export function useChat() {
             timestamp: new Date(msg.timestamp)
           }))
         );
+
+        if (d.threadId && !currentThreadId) {
+          setCurrentThreadId(d.threadId);
+        }
       }
     } catch {
       console.warn("No history found or endpoint missing.");
+    } finally {
+      setHistoryLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (fileUploads.length === 0 && !uploadSessionId) {
-      generateNewSessionId();
-    }
-  }, [fileUploads.length, uploadSessionId, generateNewSessionId]);
+  }, [historyLoading, currentThreadId]);
 
   return {
     // State

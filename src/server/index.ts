@@ -10,12 +10,12 @@ export default {
     const userId = "guest";
 
     console.log(
-      `🌐 ${request.method} ${url.pathname} - Starting request processing`
+      `${request.method} ${url.pathname} - Starting request processing`
     );
 
     // Serve static assets
     if (url.pathname === "/" || url.pathname.startsWith("/assets")) {
-      console.log("📁 Serving static assets");
+      console.log("Serving static assets");
       return env.ASSETS.fetch(request);
     }
 
@@ -30,7 +30,7 @@ export default {
     if (aiResponse) return aiResponse;
 
     // Agent routes
-    console.log("🤖 Checking agent routes...");
+    console.log("Checking agent routes...");
     const maybe = await routeAgentRequest(request, env);
     if (maybe) {
       console.log("✅ Request handled by agent routes");
@@ -38,7 +38,7 @@ export default {
     }
 
     // Fallback to static assets
-    console.log("📁 Falling back to static assets");
+    console.log("Falling back to static assets");
     return env.ASSETS.fetch(request);
   }
 } satisfies ExportedHandler<Env>;

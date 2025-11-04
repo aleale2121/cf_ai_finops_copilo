@@ -21,13 +21,13 @@ export class Chat extends AIChatAgent<Env> {
     onFinish: StreamTextOnFinishCallback<ToolSet>,
     _options?: { abortSignal?: AbortSignal }
   ) {
-    console.log("💬 Chat agent processing message...");
+    console.log("Chat agent processing message...");
     const tools: ToolSet = {};
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        console.log("🔄 Starting message stream execution...");
+        console.log("Starting message stream execution...");
         const cleaned = cleanupMessages(this.messages);
-        console.log(`📨 Cleaned ${cleaned.length} messages`);
+        console.log(`Cleaned ${cleaned.length} messages`);
 
         const processed = await processToolCalls({
           messages: cleaned,
@@ -36,7 +36,7 @@ export class Chat extends AIChatAgent<Env> {
           executions: {}
         });
 
-        console.log("🤖 Starting AI stream text generation...");
+        console.log("Starting AI stream text generation...");
         const result = streamText({
           system: `You are a helpful FinOps assistant. ${getSchedulePrompt({ date: new Date() })}`,
           messages: convertToModelMessages(processed),
@@ -56,7 +56,7 @@ export class Chat extends AIChatAgent<Env> {
   }
 
   async executeTask(description: string, _task: Schedule<string>) {
-    console.log(`🔧 Executing scheduled task: ${description}`);
+    console.log(`Executing scheduled task: ${description}`);
     await this.saveMessages([
       ...this.messages,
       {

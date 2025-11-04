@@ -1,5 +1,5 @@
 import { MessageSquare, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/button/Button";
 
 type Thread = {
@@ -131,7 +131,7 @@ export function HistoryPanel({
                   size="sm"
                   onClick={(e) => handleDelete(t.threadId, e)}
                   className="opacity-80 hover:opacity-100 transition-opacity p-2 h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900"
-                  title="Delete conversation"
+                  title=""
                 >
                   <Trash2 className="text-red-600 h-4 w-4" />
                 </Button>

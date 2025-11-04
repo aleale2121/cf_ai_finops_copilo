@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   userId TEXT NOT NULL,
   threadId TEXT NOT NULL,
-  messageId TEXT NOT NULL, -- Used for sessionId initially, then updated to final messageId
+  sessionId TEXT NOT NULL, 
+  messageId TEXT NOT NULL, 
   analysisId INTEGER,
   fileName TEXT NOT NULL,
   fileType TEXT NOT NULL,
@@ -57,3 +58,4 @@ CREATE INDEX IF NOT EXISTS idx_analyses_user_created ON analyses (userId, dateti
 CREATE INDEX IF NOT EXISTS idx_files_user_thread ON uploaded_files(userId, threadId);
 CREATE INDEX IF NOT EXISTS idx_files_message ON uploaded_files(messageId);
 CREATE INDEX IF NOT EXISTS idx_files_analysis ON uploaded_files(analysisId);
+CREATE INDEX IF NOT EXISTS idx_files_session ON uploaded_files(sessionId); 
