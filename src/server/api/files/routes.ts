@@ -1,6 +1,6 @@
 import { createThread, getLatestThread } from "../../db/d1";
 import {
-  getFileDownloadUrl, 
+  getFileDownloadUrl,
   saveFileMetadata,
   storeFileInR2
 } from "../../storage/file-storage";

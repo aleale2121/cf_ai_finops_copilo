@@ -1,6 +1,6 @@
 import {
   createThread,
-  deleteThread, 
+  deleteThread,
   getLatestThread,
   getThreadMessagesWithFiles,
   listThreads

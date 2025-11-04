@@ -58,7 +58,10 @@ async function handleThreadSummarize(
   return Response.json({ summary });
 }
 
-async function handleDebugFiles(_request: Request, env: Env): Promise<Response> {
+async function handleDebugFiles(
+  _request: Request,
+  env: Env
+): Promise<Response> {
   console.log("🐛 Debug files request");
   try {
     const objects = await env.FILES.list();
