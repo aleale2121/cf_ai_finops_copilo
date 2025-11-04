@@ -1,5 +1,5 @@
+import { History, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { Button } from "@/components/button/Button";
-import { History, Plus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 interface HeaderProps {
   onNewChat: () => void;

@@ -17,10 +17,10 @@ export async function processChatMessage(
 
   // Get all files for this session
   let filesQuery = "";
-  let queryParams: any[] = [userId, threadId];
+  const queryParams: (string | number)[] = [userId, threadId];
 
   if (fileIds.length > 0) {
-    filesQuery = "AND id IN (" + fileIds.map(() => "?").join(",") + ")";
+    filesQuery = `AND id IN (${fileIds.map(() => "?").join(",")})`;
     queryParams.push(...fileIds);
   } else if (sessionId) {
     filesQuery = "AND messageId = ?";
@@ -41,7 +41,16 @@ export async function processChatMessage(
     .bind(...queryParams)
     .all();
 
-  const files = (filesResult as any[]).map((file) => ({
+  const files = (
+    filesResult as {
+      id: number;
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      r2Key: string;
+      uploadedAt: string;
+    }[]
+  ).map((file) => ({
     id: file.id,
     fileName: file.fileName,
     fileType: file.fileType,

@@ -1,5 +1,5 @@
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/button/Button";
-import { X, Plus } from "lucide-react";
 import { HistoryPanel } from "./HistoryPanel";
 
 interface SidebarProps {

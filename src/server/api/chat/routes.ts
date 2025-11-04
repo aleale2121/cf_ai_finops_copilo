@@ -1,12 +1,12 @@
 import {
   createThread,
+  deleteThread, 
   getLatestThread,
   getThreadMessagesWithFiles,
-  listThreads,
-  deleteThread
+  listThreads
 } from "../../db/d1";
-import { processChatMessage } from "./processor";
 import { getFileDownloadUrl } from "../../storage/file-storage";
+import { processChatMessage } from "./processor";
 
 export async function chatRoutes(
   request: Request,
@@ -174,7 +174,7 @@ async function handleChatMessage(
 async function handleGetThreadMessages(
   request: Request,
   env: Env,
-  userId: string
+  _userId: string
 ): Promise<Response> {
   const url = new URL(request.url);
   const pathParts = url.pathname.split("/");

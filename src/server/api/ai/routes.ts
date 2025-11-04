@@ -22,7 +22,11 @@ export async function aiRoutes(
   return null;
 }
 
-async function handleThreadSummarize(request: Request, env: Env, userId: string): Promise<Response> {
+async function handleThreadSummarize(
+  request: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
   console.log("📝 Thread summarize request");
   const { threadId } = (await request.json()) as { threadId?: string };
   if (!threadId) {
@@ -54,7 +58,7 @@ async function handleThreadSummarize(request: Request, env: Env, userId: string)
   return Response.json({ summary });
 }
 
-async function handleDebugFiles(request: Request, env: Env): Promise<Response> {
+async function handleDebugFiles(_request: Request, env: Env): Promise<Response> {
   console.log("🐛 Debug files request");
   try {
     const objects = await env.FILES.list();
@@ -68,16 +72,18 @@ async function handleDebugFiles(request: Request, env: Env): Promise<Response> {
       "SELECT * FROM uploaded_files ORDER BY uploadedAt DESC LIMIT 10"
     ).all();
 
-    console.log(`🐛 R2 Files: ${fileList.length}, DB Files: ${results?.length || 0}`);
+    console.log(
+      `🐛 R2 Files: ${fileList.length}, DB Files: ${results?.length || 0}`
+    );
 
     return Response.json({
       r2Files: fileList,
       databaseFiles: results || [],
       r2Bucket: "cloud-finops-files",
-      totalStorage: objects.objects.reduce((sum, obj) => sum + obj.size, 0) + " bytes"
+      totalStorage: `${objects.objects.reduce((sum, obj) => sum + obj.size, 0)} bytes`
     });
   } catch (error) {
     console.error("❌ Debug failed:", error);
-    return Response.json({ error: "Debug failed: " + error }, { status: 500 });
+    return Response.json({ error: `Debug failed: ${error}` }, { status: 500 });
   }
 }

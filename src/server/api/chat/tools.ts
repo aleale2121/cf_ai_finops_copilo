@@ -1,8 +1,7 @@
-import { tool, type ToolSet } from "ai";
-import { z } from "zod/v3";
-
-import type { Chat } from "../../ai/chat-agent";
 import { getCurrentAgent } from "agents";
+import { type ToolSet, tool } from "ai";
+import { z } from "zod/v3";
+import type { Chat } from "../../ai/chat-agent";
 import { analyzeCostsWithGemini } from "../../ai/optimizer";
 
 const analyzeCosts = tool({
@@ -14,7 +13,7 @@ const analyzeCosts = tool({
   }),
   execute: async ({ plan, metrics, comment }) => {
     const { agent } = getCurrentAgent<Chat>();
-    const env = (agent as any).env as Env;
+    const env = (agent as unknown as { env: Env }).env;
     return await analyzeCostsWithGemini(env, plan, metrics, comment ?? "");
   }
 });

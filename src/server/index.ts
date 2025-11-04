@@ -1,8 +1,8 @@
 import { routeAgentRequest } from "agents";
+import { Chat } from "./ai/chat-agent";
+import { aiRoutes } from "./api/ai/routes";
 import { chatRoutes } from "./api/chat/routes";
 import { fileRoutes } from "./api/files/routes";
-import { aiRoutes } from "./api/ai/routes";
-import { Chat } from "./ai/chat-agent";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

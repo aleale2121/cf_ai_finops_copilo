@@ -1,5 +1,9 @@
-import { getLatestThread, createThread } from "../../db/d1";
-import { storeFileInR2, saveFileMetadata, getFileDownloadUrl } from "../../storage/file-storage";
+import { createThread, getLatestThread } from "../../db/d1";
+import {
+  getFileDownloadUrl, 
+  saveFileMetadata,
+  storeFileInR2
+} from "../../storage/file-storage";
 
 export async function fileRoutes(
   request: Request,
@@ -26,7 +30,10 @@ export async function fileRoutes(
   return null;
 }
 
-async function handleFileDownload(request: Request, env: Env): Promise<Response> {
+async function handleFileDownload(
+  request: Request,
+  env: Env
+): Promise<Response> {
   try {
     const url = new URL(request.url);
     const r2Key = decodeURIComponent(url.pathname.replace("/api/files/", ""));
@@ -42,7 +49,8 @@ async function handleFileDownload(request: Request, env: Env): Promise<Response>
 
     return new Response(obj.body, {
       headers: {
-        "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",
+        "Content-Type":
+          obj.httpMetadata?.contentType || "application/octet-stream",
         "Content-Disposition":
           obj.httpMetadata?.contentDisposition ||
           `attachment; filename="${r2Key.split("/").pop()}"`,
@@ -55,7 +63,11 @@ async function handleFileDownload(request: Request, env: Env): Promise<Response>
   }
 }
 
-async function handleFileUpload(request: Request, env: Env, userId: string): Promise<Response> {
+async function handleFileUpload(
+  request: Request,
+  env: Env,
+  userId: string
+): Promise<Response> {
   console.log("📤 File upload request received");
   try {
     const formData = await request.formData();
@@ -63,7 +75,9 @@ async function handleFileUpload(request: Request, env: Env, userId: string): Pro
     const fileType = formData.get("fileType") as string;
     const sessionId = formData.get("sessionId") as string;
 
-    console.log(`📄 File upload details - Name: ${file?.name}, Type: ${fileType}, Size: ${file?.size} bytes, Session: ${sessionId}`);
+    console.log(
+      `📄 File upload details - Name: ${file?.name}, Type: ${fileType}, Size: ${file?.size} bytes, Session: ${sessionId}`
+    );
 
     if (!file) {
       console.log("❌ No file provided in upload");
@@ -85,7 +99,8 @@ async function handleFileUpload(request: Request, env: Env, userId: string): Pro
       );
     }
 
-    const threadId = (await getLatestThread(env, userId)) || (await createThread(env, userId));
+    const threadId =
+      (await getLatestThread(env, userId)) || (await createThread(env, userId));
     console.log(`💾 Storing file in R2 for thread: ${threadId}`);
 
     // Store file in R2
@@ -145,7 +160,7 @@ async function handleFileDelete(request: Request, env: Env): Promise<Response> {
     const pathParts = url.pathname.split("/");
     const fileId = pathParts[pathParts.length - 1];
 
-    if (!fileId || isNaN(Number(fileId))) {
+    if (!fileId || Number.isNaN(Number(fileId))) {
       return new Response(JSON.stringify({ error: "Invalid file ID" }), {
         status: 400
       });
@@ -156,7 +171,9 @@ async function handleFileDelete(request: Request, env: Env): Promise<Response> {
     // Find R2 key for file
     const { results } = await env.DB.prepare(
       `SELECT r2Key FROM uploaded_files WHERE id = ?`
-    ).bind(fileId).all();
+    )
+      .bind(fileId)
+      .all();
 
     if (results.length === 0) {
       return new Response(JSON.stringify({ error: "File not found" }), {
@@ -171,7 +188,9 @@ async function handleFileDelete(request: Request, env: Env): Promise<Response> {
     console.log(`✅ Deleted from R2: ${r2Key}`);
 
     // Delete from database
-    await env.DB.prepare(`DELETE FROM uploaded_files WHERE id = ?`).bind(fileId).run();
+    await env.DB.prepare(`DELETE FROM uploaded_files WHERE id = ?`)
+      .bind(fileId)
+      .run();
     console.log(`✅ Deleted from database: ${fileId}`);
 
     return Response.json({ success: true });

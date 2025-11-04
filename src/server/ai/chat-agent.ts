@@ -1,18 +1,18 @@
-import { type Schedule } from "agents";
-import { getSchedulePrompt } from "agents/schedule";
+import { google } from "@ai-sdk/google";
+import type { Schedule } from "agents";
 import { AIChatAgent } from "agents/ai-chat-agent";
+import { getSchedulePrompt } from "agents/schedule";
 import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
   generateId,
-  streamText,
   type StreamTextOnFinishCallback,
   stepCountIs,
-  createUIMessageStream,
-  convertToModelMessages,
-  createUIMessageStreamResponse,
+  streamText,
   type ToolSet
 } from "ai";
-import { google } from "@ai-sdk/google";
-import { processToolCalls, cleanupMessages } from "../utils/message-utils";
+import { cleanupMessages, processToolCalls } from "../utils/message-utils";
 
 const model = google("gemini-2.5-flash");
 

@@ -1,6 +1,6 @@
+import { Upload } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Upload } from "lucide-react";
 
 type FileUploadProps = {
   onFileSelect: (file: File | null) => void;

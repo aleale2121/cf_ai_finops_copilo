@@ -1,4 +1,5 @@
-import { type UploadedFile } from "../storage/file-storage";
+import type { UploadedFile } from "../storage/file-storage";
+
 export interface Thread {
   threadId: string;
   title: string;
@@ -13,6 +14,32 @@ export interface MessageWithFiles {
   messageId: string;
   files: UploadedFile[];
   createdAt: string;
+}
+
+// Database row interfaces
+interface DatabaseFileRow {
+  id: number;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  r2Key: string;
+  uploadedAt: string;
+  messageId?: string;
+}
+
+interface DatabaseMessageRow {
+  role: string;
+  content: string;
+  relevant: number;
+  messageId: string;
+  createdAt: string;
+}
+
+interface DatabaseThreadRow {
+  threadId: string;
+  title: string;
+  createdAt: string;
+  msgCount: number;
 }
 
 export async function createThread(env: Env, userId: string): Promise<string> {
@@ -95,27 +122,34 @@ export async function getThreadMessagesWithFiles(
     .bind(userId, threadId)
     .all();
 
-  const filesByMessage = (files as any[]).reduce((acc, file) => {
-    if (file.messageId) {
-      if (!acc[file.messageId]) {
-        acc[file.messageId] = [];
-      }
-      acc[file.messageId].push({
-        id: file.id,
-        fileName: file.fileName,
-        fileType: file.fileType,
-        fileSize: file.fileSize,
-        r2Key: file.r2Key,
-        uploadedAt: file.uploadedAt
-      });
-    }
-    return acc;
-  }, {});
+  // Safe type assertion with validation
+  const filesArray = files as unknown as DatabaseFileRow[];
+  const messagesArray = messages as unknown as DatabaseMessageRow[];
 
-  return (messages as any[]).map((msg) => ({
+  const filesByMessage = filesArray.reduce(
+    (acc, file) => {
+      if (file.messageId) {
+        if (!acc[file.messageId]) {
+          acc[file.messageId] = [];
+        }
+        acc[file.messageId].push({
+          id: file.id,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          fileSize: file.fileSize,
+          r2Key: file.r2Key,
+          uploadedAt: file.uploadedAt
+        });
+      }
+      return acc;
+    },
+    {} as Record<string, UploadedFile[]>
+  );
+
+  return messagesArray.map((msg) => ({
     role: msg.role,
     content: msg.content,
-    relevant: !!msg.relevant,
+    relevant: Boolean(msg.relevant),
     messageId: msg.messageId,
     createdAt: msg.createdAt,
     files: filesByMessage[msg.messageId] || []
@@ -154,7 +188,9 @@ export async function listThreads(env: Env, userId: string): Promise<Thread[]> {
     .bind(userId)
     .all();
 
-  return ((results as any[]) ?? []).map((r) => ({
+  const resultsArray = (results as unknown as DatabaseThreadRow[]) ?? [];
+
+  return resultsArray.map((r) => ({
     threadId: r.threadId,
     title: r.title,
     createdAt: r.createdAt,
@@ -195,7 +231,7 @@ export async function getFullThreadText(
     .all();
 
   const rows =
-    (results as { role: string; content: string }[] | undefined) ?? [];
+    (results as unknown as { role: string; content: string }[]) ?? [];
   if (!rows.length) return "No messages.";
   return rows.map((r) => `${r.role}: ${r.content}`).join("\n");
 }

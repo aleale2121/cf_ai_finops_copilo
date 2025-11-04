@@ -1,7 +1,7 @@
-import { type ChatMessage } from "@/types/chat";
-import { MemoizedMarkdown } from "@/components/memoized-markdown";
-import { FileIcon } from "@/components/file-icon/FileIcon";
 import { MessageCircle } from "lucide-react";
+import { FileIcon } from "@/components/file-icon/FileIcon";
+import { MemoizedMarkdown } from "@/components/memoized-markdown";
+import type { ChatMessage } from "@/types/chat";
 
 interface ChatMessagesProps {
   messages: ChatMessage[];

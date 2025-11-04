@@ -1,8 +1,8 @@
+import { Loader2, X } from "lucide-react";
+import { Button } from "@/components/button/Button";
 import { FileUpload } from "@/components/file-upload/file-upload";
 import { Textarea } from "@/components/textarea/Textarea";
-import { Button } from "@/components/button/Button";
-import { Loader2, X } from "lucide-react";
-import { type FileUploadProgress } from "@/types/chat";
+import type { FileUploadProgress } from "@/types/chat";
 
 interface ChatInputProps {
   message: string;
@@ -29,7 +29,7 @@ export function ChatInput({
     <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
       {/* File Upload Progress */}
       {fileUploads.length > 0 && (
-        <FileUploadProgress
+        <FileUploadProgressDisplay
           fileUploads={fileUploads}
           onRemoveFile={onRemoveFile}
         />
@@ -98,7 +98,8 @@ export function ChatInput({
   );
 }
 
-function FileUploadProgress({
+// Renamed from FileUploadProgress to avoid conflict with the imported type
+function FileUploadProgressDisplay({
   fileUploads,
   onRemoveFile
 }: {

@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type {
   ChatMessage,
   ChatResponse,
-  HistoryResponse,
   FileUploadProgress,
+  HistoryResponse,
   UploadedFile
 } from "@/types/chat";
+
 export function useChat() {
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -16,11 +17,12 @@ export function useChat() {
   );
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
 
-  const generateNewSessionId = () => {
+  // Wrap in useCallback to stabilize the function reference
+  const generateNewSessionId = useCallback(() => {
     const newSessionId = crypto.randomUUID();
     setUploadSessionId(newSessionId);
     return newSessionId;
-  };
+  }, []);
 
   const loadThread = async (threadId: string) => {
     try {
@@ -160,23 +162,6 @@ export function useChat() {
     console.log(
       "🆕 Preparing new chat - thread will be created with first message"
     );
-    /*
-    try {
-      const response = await fetch("/api/chat/new", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({})
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as NewChatResponse;
-        setCurrentThreadId(data.threadId);
-        console.log("New chat started with thread:", data.threadId);
-      }
-    } catch (error) {
-      console.error("Failed to create new chat:", error);
-    }
-     */
   };
 
   const handleSend = async () => {
@@ -264,7 +249,7 @@ export function useChat() {
     if (fileUploads.length === 0 && !uploadSessionId) {
       generateNewSessionId();
     }
-  }, [fileUploads.length, uploadSessionId]);
+  }, [fileUploads.length, uploadSessionId, generateNewSessionId]);
 
   return {
     // State

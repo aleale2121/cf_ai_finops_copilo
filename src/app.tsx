@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useChat } from "@/hooks/useChat";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { ChatMessages } from "@/components/chat/ChatMessages";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { ChatMessages } from "@/components/chat/ChatMessages";
-import { ChatInput } from "@/components/chat/ChatInput";
+import { useChat } from "@/hooks/useChat";
 
 export default function App() {
   const [showSidebar, setShowSidebar] = useState(false);
@@ -31,12 +31,12 @@ export default function App() {
       chatContainerRef.current.scrollTop =
         chatContainerRef.current.scrollHeight;
     }
-  }, [chat]);
+  }, []);
 
   // Load chat history on mount
   useEffect(() => {
     loadChatHistory();
-  }, []);
+  }, [loadChatHistory]);
 
   const handleThreadSelectWithSidebar = async (threadId: string) => {
     const shouldCloseSidebar = await handleThreadSelect(threadId);

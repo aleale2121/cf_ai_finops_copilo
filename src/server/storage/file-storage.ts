@@ -38,7 +38,7 @@ export async function storeFileInR2(
 }
 
 export async function getFileDownloadUrl(
-  env: Env,
+  _env: Env,
   r2Key: string
 ): Promise<string> {
   return `/api/files/${r2Key}`;
@@ -87,7 +87,17 @@ export async function getMessageFiles(
     .bind(messageId)
     .all();
 
-  return (results as any[]).map((row) => ({
+  // Safe type assertion
+  const resultsArray = results as unknown as {
+    id: number;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    r2Key: string;
+    uploadedAt: string;
+  }[];
+
+  return resultsArray.map((row) => ({
     id: row.id,
     fileName: row.fileName,
     fileType: row.fileType,

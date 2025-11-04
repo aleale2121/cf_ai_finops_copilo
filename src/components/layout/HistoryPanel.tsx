@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { MessageSquare, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/button/Button";
-import { MessageSquare, Trash2, Plus } from "lucide-react";
 
 type Thread = {
   threadId: string;
@@ -23,7 +23,8 @@ export function HistoryPanel({
 }: HistoryPanelProps) {
   const [threads, setThreads] = useState<Thread[]>([]);
 
-  async function loadThreads() {
+  // Wrap loadThreads in useCallback to stabilize the dependency
+  const loadThreads = useCallback(async () => {
     try {
       const r = await fetch("/api/chat/list");
       if (!r.ok) return;
@@ -32,11 +33,11 @@ export function HistoryPanel({
     } catch (error) {
       console.error("Failed to load threads:", error);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadThreads();
-  }, []);
+  }, [loadThreads]);
 
   async function handleThreadClick(threadId: string) {
     if (onThreadSelect) {
@@ -96,10 +97,10 @@ export function HistoryPanel({
         ) : (
           <div className="space-y-1">
             {threads.map((t) => (
-              <div
+              <button
                 key={t.threadId}
                 className={`
-                  flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors group
+                  flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors group w-full text-left
                   ${
                     currentThreadId === t.threadId
                       ? "bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800"
@@ -107,6 +108,13 @@ export function HistoryPanel({
                   }
                 `}
                 onClick={() => handleThreadClick(t.threadId)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleThreadClick(t.threadId);
+                  }
+                }}
+                type="button"
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-sm text-slate-900 dark:text-white truncate mb-1">
@@ -123,11 +131,11 @@ export function HistoryPanel({
                   size="sm"
                   onClick={(e) => handleDelete(t.threadId, e)}
                   className="opacity-80 hover:opacity-100 transition-opacity p-2 h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900"
-                  title=""
+                  title="Delete conversation"
                 >
                   <Trash2 className="text-red-600 h-4 w-4" />
                 </Button>
-              </div>
+              </button>
             ))}
           </div>
         )}
